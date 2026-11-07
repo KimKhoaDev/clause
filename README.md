@@ -19,6 +19,15 @@ Android settings get/put, tap/swipe/type/keys, screen reading (UI dump + screens
 Safety: approval sheet before actions (Ask / Auto-approve safe / Full auto), risk levels, allowed-folder list, hard-blocked catastrophic
 commands, per-file backups with **Undo/Keep**, full activity log, step limit, untrusted-content warning in the system prompt.
 
+## AI providers
+Anthropic, OpenRouter, Kilo Gateway (api.kilo.ai/api/gateway), Google Gemini (API key), OpenAI, Groq, DeepSeek, Mistral, xAI, Ollama and any
+custom OpenAI-compatible endpoint. Switch provider/model from the pill at the top of a chat (fetch + search models, or type any id).
+Device-control tools work on every provider (tool calls are converted). Web search is Anthropic-only. "Enter without verifying" skips the key test.
+Google Antigravity sign-in is intentionally not included: it relies on private endpoints. Use a Gemini API key instead.
+
+## Auto mode
+The ⚡ Auto chip runs device actions without asking for the current chat (resets on a new chat). Catastrophic commands stay blocked and changes stay undoable.
+
 ## Customisation
 Theme, accent colour (presets + hex), reply font, text size, background glow, and every liquid-glass parameter (blur, refraction edge/strength,
 opacity, vibrancy) with a live preview.
@@ -30,6 +39,3 @@ artifacts (HTML/SVG), SVG image generation, scheduled prompts, auto-send after u
 ## Credits
 Design ideas on checkpoints/undo, bounded output, and verified downloads/APK installs were inspired by
 [Mobile-Harness](https://github.com/techjarves/Mobile-Harness) (MIT). No code was copied; its PRoot/Linux runtime is not used.
-
-## Liquid glass credits
-The tab bar, buttons, toggle and slider are adapted from the catalog in [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) (Apache-2.0), see `ui/glass/`.
