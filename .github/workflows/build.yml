@@ -24,8 +24,9 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses
+      - name: Accept Android SDK licenses (non-interactive)
+        run: |
+          yes | sdkmanager --licenses || true
 
       - name: Create local.properties for CI
         run: echo "sdk.dir=${ANDROID_HOME}" > local.properties
