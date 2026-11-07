@@ -30,3 +30,6 @@ artifacts (HTML/SVG), SVG image generation, scheduled prompts, auto-send after u
 ## Credits
 Design ideas on checkpoints/undo, bounded output, and verified downloads/APK installs were inspired by
 [Mobile-Harness](https://github.com/techjarves/Mobile-Harness) (MIT). No code was copied; its PRoot/Linux runtime is not used.
+
+## Liquid glass credits
+The tab bar, buttons, toggle and slider are adapted from the catalog in [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) (Apache-2.0), see `ui/glass/`.
