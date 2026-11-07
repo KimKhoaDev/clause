@@ -28,12 +28,17 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.shapes.Capsule
+import com.example.claude.ui.glass.LiquidButton
+import com.example.claude.ui.glass.LiquidToggle
 
-/** Liquid-glass surface from Kyant0/AndroidLiquidGlass. */
+val LocalBackdrop = androidx.compose.runtime.staticCompositionLocalOf<Backdrop?> { null }
+
+/** Liquid-glass surface (Kyant0/AndroidLiquidGlass): vibrancy + blur + lens, with default highlight and shadow. */
 @Composable
 fun Modifier.glass(backdrop: Backdrop, shape: Shape, tint: Color = Color.Unspecified): Modifier {
     val ui = LocalUi.current
-    val surface = if (tint == Color.Unspecified) Color.White.copy(alpha = if (P.dark) ui.tint * 0.35f else ui.tint) else tint
+    val base = if (P.dark) Color(0xFF121212) else Color(0xFFFAFAFA)
+    val surface = if (tint == Color.Unspecified) base.copy(alpha = ui.tint) else tint
     return drawBackdrop(
         backdrop = backdrop,
         shape = { shape },
@@ -55,12 +60,7 @@ fun GlassButton(
     backdrop: Backdrop, onClick: () -> Unit, modifier: Modifier = Modifier,
     tint: Color = Color.Unspecified, enabled: Boolean = true, content: @Composable RowScope.() -> Unit,
 ) {
-    Row(
-        modifier.glass(backdrop, Capsule(), tint).alpha(if (enabled) 1f else 0.5f)
-            .tap(enabled, onClick).defaultMinSize(44.dp, 44.dp).padding(horizontal = 14.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically, content = content,
-    )
+    LiquidButton(onClick = { if (enabled) onClick() }, backdrop = backdrop, modifier = modifier.alpha(if (enabled) 1f else 0.5f), tint = tint, content = content)
 }
 
 @Composable
@@ -70,24 +70,26 @@ fun Label(text: String, modifier: Modifier = Modifier, color: Color = P.text, si
 
 @Composable
 fun GlassIcon(backdrop: Backdrop, glyph: String, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color = Color.Unspecified, enabled: Boolean = true) {
-    GlassButton(backdrop, onClick, modifier.size(44.dp), tint, enabled) {
+    LiquidButton(onClick = { if (enabled) onClick() }, backdrop = backdrop, modifier = modifier.size(48.dp).alpha(if (enabled) 1f else 0.5f),
+        tint = tint, horizontalPadding = 0.dp) {
         Label(glyph, color = if (tint == Color.Unspecified) P.text else Color.White, size = 18, bold = true)
     }
 }
 
 @Composable
 fun Chip(backdrop: Backdrop, text: String, selected: Boolean, onClick: () -> Unit) {
-    GlassButton(backdrop, onClick, tint = if (selected) P.accent.copy(alpha = 0.85f) else Color.Unspecified) {
+    LiquidButton(onClick = onClick, backdrop = backdrop, tint = if (selected) P.accent else Color.Unspecified, height = 40.dp, horizontalPadding = 14.dp) {
         Label(text, color = if (selected) Color.White else P.text, size = 14, bold = selected)
     }
 }
 
 @Composable
 fun Switch(on: Boolean, onChange: (Boolean) -> Unit) {
-    Box(
+    val bd = LocalBackdrop.current
+    if (bd != null) LiquidToggle(selected = { on }, onSelect = onChange, backdrop = bd)
+    else Box(
         Modifier.size(50.dp, 30.dp).tap { onChange(!on) }
             .background(if (on) P.accent else P.sub.copy(alpha = 0.35f), Capsule()).padding(3.dp),
         contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
     ) { Box(Modifier.size(24.dp).background(Color.White, Capsule())) }
 }
-

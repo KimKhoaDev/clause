@@ -22,8 +22,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -169,7 +169,3 @@ private fun savePng(ctx: Context, w: WebView?) {
         Toast.makeText(ctx, "Saved to Pictures/Claude", Toast.LENGTH_SHORT).show()
     }.onFailure { Toast.makeText(ctx, "Couldn't save image", Toast.LENGTH_SHORT).show() }
 }
-
-
-
-

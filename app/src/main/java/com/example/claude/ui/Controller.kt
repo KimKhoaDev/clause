@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.example.claude.net.AI
 import com.example.claude.agent.AgentStore
 import com.example.claude.agent.AgentTools
 import com.example.claude.agent.LogEntry
@@ -49,6 +50,10 @@ class ChatController(private val scope: CoroutineScope, private val appCtx: Cont
     var webSearch by mutableStateOf(Repo.webDefault.value)
     var imagine by mutableStateOf(false)
     var agent by mutableStateOf(false)
+    /** Auto mode: device actions run without asking (this chat only). Hard guardrails still apply. */
+    var autoMode by mutableStateOf(false)
+    /** Auto mode: device actions run without asking (hard-blocked commands stay blocked). Resets per chat. */
+    var autoMode by mutableStateOf(false)
     var approval by mutableStateOf<ApprovalRequest?>(null); private set
     private var approvalWait: CompletableDeferred<Decision>? = null
     private val sessionAllowed = mutableSetOf<String>()
@@ -56,11 +61,11 @@ class ChatController(private val scope: CoroutineScope, private val appCtx: Cont
     private var job: Job? = null
 
     fun newChat(project: String? = null) {
-        stop(); sessionAllowed.clear(); chatId = null; projectId = project; msgs = emptyList(); error = null; limit = null; pending = emptyList(); status = null
+        stop(); sessionAllowed.clear(); autoMode = false; chatId = null; projectId = project; msgs = emptyList(); error = null; limit = null; pending = emptyList(); status = null
     }
 
     fun open(id: String) {
-        stop()
+        stop(); autoMode = false
         Repo.chat(id)?.let { chatId = it.id; projectId = it.projectId; msgs = it.msgs; error = null; limit = null; pending = emptyList() }
     }
 
@@ -96,7 +101,7 @@ class ChatController(private val scope: CoroutineScope, private val appCtx: Cont
         val isNew = chatId == null
         val id = chatId ?: UUID.randomUUID().toString().also { chatId = it }
         val proj = projectId
-        val web = webSearch
+        val web = webSearch && AI.supportsWeb()
         val useAgent = agent && Shell.available()
         val sys = listOf(Prompts.system(proj), extra, if (useAgent) AGENT_PROMPT else "", if (imagine) IMAGINE_PROMPT else "").filter { it.isNotBlank() }.joinToString("\n\n")
         imagine = false
@@ -104,7 +109,7 @@ class ChatController(private val scope: CoroutineScope, private val appCtx: Cont
         job = scope.launch {
             var failed = false
             try {
-                if (useAgent) runAgent(key, sys, history, id) else ClaudeApi.stream(key, Repo.model.value, sys, history, web,
+                if (useAgent) runAgent(key, sys, history, id) else AI.stream(key, Repo.model.value, sys, history, web,
                     onDelta = { d -> val last = msgs.last(); msgs = msgs.dropLast(1) + last.copy(text = last.text + d) },
                     onStatus = { status = it },
                     onSources = { s -> val last = msgs.last(); msgs = msgs.dropLast(1) + last.copy(sources = (last.sources + s).distinctBy { it.url }) })
@@ -147,7 +152,7 @@ class ChatController(private val scope: CoroutineScope, private val appCtx: Cont
             log("blocked", false, it)
             return ToolOutput("Blocked by safety guardrails: $it. Do not retry this.", false, "blocked")
         }
-        val mode = Repo.agent.value.mode
+        val mode = if (autoMode) 2 else Repo.agent.value.mode
         val auto = mode == 2 || (mode == 1 && risk == Risk.SAFE) || (name in sessionAllowed && risk != Risk.DANGEROUS)
         var decision = "auto"
         if (!auto) {
@@ -182,7 +187,7 @@ class ChatController(private val scope: CoroutineScope, private val appCtx: Cont
         while (iter < max) {
             iter++
             var started = false
-            val turn = ClaudeApi.streamTurn(key, Repo.model.value, sys, api, AgentTools.schemas) { d ->
+            val turn = AI.streamTurn(key, Repo.model.value, sys, api, AgentTools.schemas) { d ->
                 setLast { it.copy(text = if (!started && it.text.isNotBlank()) it.text + "\n\n" + d else it.text + d) }; started = true
             }
             val am = JSONObject().put("role", "assistant").put("content", turn.content)
@@ -222,7 +227,7 @@ class ChatController(private val scope: CoroutineScope, private val appCtx: Cont
     private fun autoTitle(key: String, id: String, user: String, reply: String) {
         scope.launch {
             runCatching {
-                val title = ClaudeApi.complete(key, Models.TITLE_MODEL, "", listOf(Msg("user",
+                val title = AI.complete(key, AI.titleModel(), "", listOf(Msg("user",
                     "Write a title of 3 to 6 words for this conversation. Reply with only the title, no quotes.\n\nUser: ${user.take(400)}\n\nAssistant: ${reply.take(400)}")), 24)
                     .trim().trim('"').take(60)
                 if (title.isNotBlank()) Repo.patchChat(id) { it.copy(title = title) }

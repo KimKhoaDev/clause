@@ -18,7 +18,8 @@ class ApiException(message: String, val code: Int = 0, val retryAfterSec: Long? 
     /** "credit", "rate", "overloaded" or null when this isn't a usage/availability limit. */
     val limitKind: String?
         get() = when {
-            message.orEmpty().contains("credit balance", true) || message.orEmpty().contains("usage limit", true) -> "credit"
+            message.orEmpty().contains("credit balance", true) || message.orEmpty().contains("usage limit", true) ||
+                message.orEmpty().contains("insufficient", true) || message.orEmpty().contains("more credits", true) || code == 402 -> "credit"
             code == 429 || type == "rate_limit_error" -> "rate"
             code == 529 || type == "overloaded_error" -> "overloaded"
             else -> null

@@ -26,7 +26,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17' # Thay đổi thành 11 hoặc 21 nếu dự án của bạn yêu cầu khác
+          java-version: '21' # Thay đổi thành 11 hoặc 21 nếu dự án của bạn yêu cầu khác
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4

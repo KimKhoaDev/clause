@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -27,13 +28,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import com.example.claude.ui.glass.LiquidBottomTab
+import com.example.claude.ui.glass.LiquidBottomTabs
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -79,6 +83,10 @@ enum class Screen { Chat, History, Projects, Schedules, Settings, Activity }
 
 // ------------------------------------------------------------------ shell
 
+private fun titleOf(s: Screen) = when (s) {
+    Screen.History -> "Chats"; Screen.Projects -> "Projects"; Screen.Schedules -> "Scheduled"; Screen.Settings -> "Settings"; Screen.Activity -> "Activity"; else -> ""
+}
+
 @Composable
 fun App(ctl: ChatController, pendingChat: String?, onPendingHandled: () -> Unit, needPerms: () -> Unit) {
     val key by Repo.apiKey.collectAsState()
@@ -90,25 +98,20 @@ fun App(ctl: ChatController, pendingChat: String?, onPendingHandled: () -> Unit,
     }
     BackHandler(enabled = key != null && screen != Screen.Chat) { screen = Screen.Chat }
 
-    Box(Modifier.fillMaxSize().background(P.bg)) {
-        Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) { Aura() }
-        if (key == null) LoginScreen(backdrop)
-        else when (screen) {
-            Screen.Chat -> ChatScreen(ctl, backdrop, onMenu = { screen = Screen.History })
-            Screen.History -> TabScaffold("Chats", screen, backdrop, { screen = it }) { pad ->
-                HistoryScreen(ctl, backdrop, pad) { screen = Screen.Chat }
-            }
-            Screen.Projects -> TabScaffold("Projects", screen, backdrop, { screen = it }) { pad ->
-                ProjectsScreen(ctl, backdrop, pad) { screen = Screen.Chat }
-            }
-            Screen.Schedules -> TabScaffold("Scheduled", screen, backdrop, { screen = it }) { pad ->
-                SchedulesScreen(backdrop, pad, needPerms)
-            }
-            Screen.Settings -> TabScaffold("Settings", screen, backdrop, { screen = it }) { pad ->
-                SettingsScreen(backdrop, pad, needPerms, onActivity = { screen = Screen.Activity }) { screen = Screen.Chat; ctl.newChat() }
-            }
-            Screen.Activity -> TabScaffold("Activity", Screen.Settings, backdrop, { screen = it }) { pad ->
-                ActivityScreen(backdrop, pad)
+    CompositionLocalProvider(LocalBackdrop provides backdrop) {
+        Box(Modifier.fillMaxSize().background(P.bg)) {
+            Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) { Aura() }
+            if (key == null) LoginScreen(backdrop)
+            else if (screen == Screen.Chat) ChatScreen(ctl, backdrop, onMenu = { screen = Screen.History })
+            else TabScaffold(titleOf(screen), if (screen == Screen.Activity) Screen.Settings else screen, backdrop, { screen = it }) { pad ->
+                when (screen) {
+                    Screen.History -> HistoryScreen(ctl, backdrop, pad) { screen = Screen.Chat }
+                    Screen.Projects -> ProjectsScreen(ctl, backdrop, pad) { screen = Screen.Chat }
+                    Screen.Schedules -> SchedulesScreen(backdrop, pad, needPerms)
+                    Screen.Settings -> SettingsScreen(backdrop, pad, needPerms, onActivity = { screen = Screen.Activity }) { screen = Screen.Chat; ctl.newChat() }
+                    Screen.Activity -> ActivityScreen(backdrop, pad)
+                    else -> {}
+                }
             }
         }
     }
@@ -134,24 +137,28 @@ fun insetTop(): Dp = WindowInsets.statusBars.asPaddingValues().calculateTopPaddi
 @Composable
 fun insetBottom(): Dp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
+/** Page content sits in its own backdrop layer so the floating header and Liquid tab bar refract it as it scrolls. */
 @Composable
 fun TabScaffold(title: String, current: Screen, backdrop: Backdrop, go: (Screen) -> Unit, content: @Composable (PaddingValues) -> Unit) {
+    val page = rememberLayerBackdrop()
+    val tabs = listOf(Screen.History to ("💬" to "Chats"), Screen.Projects to ("📁" to "Projects"), Screen.Schedules to ("⏰" to "Scheduled"), Screen.Settings to ("⚙" to "Settings"))
+    val sel = tabs.indexOfFirst { it.first == current }.coerceAtLeast(0)
     Box(Modifier.fillMaxSize()) {
-        content(PaddingValues(top = insetTop() + 72.dp, bottom = insetBottom() + 96.dp))
+        Box(Modifier.fillMaxSize().layerBackdrop(page)) {
+            Aura()
+            content(PaddingValues(top = insetTop() + 72.dp, bottom = insetBottom() + 110.dp))
+        }
         Row(Modifier.fillMaxWidth().padding(top = insetTop() + 10.dp, start = 14.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            GlassIcon(backdrop, "‹", { go(Screen.Chat) })
+            GlassIcon(page, "‹", { go(Screen.Chat) })
             Spacer(Modifier.width(12.dp))
             Label(title, size = 26, font = androidx.compose.ui.text.font.FontFamily.Serif)
         }
-        Row(
-            Modifier.align(Alignment.BottomCenter).padding(bottom = insetBottom() + 14.dp)
-                .glass(backdrop, Capsule()).padding(6.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        LiquidBottomTabs(
+            selectedTabIndex = { sel }, onTabSelected = { go(tabs[it].first) }, backdrop = page, tabsCount = tabs.size,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp).padding(bottom = insetBottom() + 14.dp),
         ) {
-            listOf(Screen.History to ("💬" to "Chats"), Screen.Projects to ("📁" to "Projects"), Screen.Schedules to ("⏰" to "Scheduled"), Screen.Settings to ("⚙" to "Settings")).forEach { (s, il) ->
-                Box(
-                    Modifier.tap { go(s) }.background(if (s == current) P.accent else Color.Transparent, Capsule()).padding(horizontal = 14.dp, vertical = 11.dp),
-                ) { Label(if (s == current) "${il.first} ${il.second}" else il.first, color = if (s == current) Color.White else P.text, size = 14, bold = s == current) }
+            tabs.forEach { (s, il) ->
+                LiquidBottomTab({ go(s) }) { Label(il.first, size = 20); Label(il.second, size = 10, bold = true) }
             }
         }
     }
@@ -162,7 +169,7 @@ fun GlassField(
     backdrop: Backdrop, value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier,
     singleLine: Boolean = false, password: Boolean = false, maxLines: Int = 5, keyboard: KeyboardType = KeyboardType.Text,
 ) {
-    Box(modifier.glass(backdrop, RoundedCornerShape(20.dp)).padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Box(modifier.glass(backdrop, RoundedCornerShape(22.dp)).padding(horizontal = 16.dp, vertical = 12.dp)) {
         if (value.isEmpty()) Label(hint, color = P.sub)
         BasicTextField(
             value, onChange, Modifier.fillMaxWidth(),
@@ -178,37 +185,27 @@ fun GlassField(
 
 @Composable
 fun LoginScreen(backdrop: Backdrop) {
-    val scope = rememberCoroutineScope()
-    var key by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(false) }
-    var err by remember { mutableStateOf<String?>(null) }
+    var pid by remember { mutableStateOf("anthropic") }
+    val p = Repo.providerById(pid)
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(top = insetTop(), bottom = insetBottom()).imePadding(),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(top = insetTop(), bottom = insetBottom()).imePadding(),
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.size(72.dp).background(P.accent, RoundedCornerShape(20.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(72.dp).background(P.accent, RoundedCornerShape(22.dp)), contentAlignment = Alignment.Center) {
             Label("✺", color = Color.White, size = 38, bold = true)
         }
         Spacer(Modifier.height(18.dp))
         Label("Clause", size = 40, font = androidx.compose.ui.text.font.FontFamily.Serif)
         Spacer(Modifier.height(6.dp))
-        Label("Sign in with your Anthropic API key", color = P.sub)
-        Spacer(Modifier.height(28.dp))
-        GlassField(backdrop, key, { key = it.trim(); err = null }, "sk-ant-…", Modifier.fillMaxWidth(), singleLine = true, password = true)
-        err?.let { Spacer(Modifier.height(10.dp)); Label(it, color = Color(0xFFD64545), size = 13) }
-        Spacer(Modifier.height(16.dp))
-        GlassButton(backdrop, {
-            loading = true; err = null
-            scope.launch {
-                try { ClaudeApi.validate(key, Repo.model.value); Repo.setApiKey(key) }
-                catch (e: Exception) { err = e.message ?: "Could not verify key" }
-                loading = false
-            }
-        }, Modifier.fillMaxWidth(), tint = P.accent.copy(alpha = 0.9f), enabled = key.length > 20 && !loading) {
-            Label(if (loading) "Verifying…" else "Continue", color = Color.White, bold = true)
+        Label("Pick a provider and add your API key", color = P.sub)
+        Spacer(Modifier.height(20.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Repo.allProviders().forEach { pr -> Chip(backdrop, pr.name, pr.id == pid) { pid = pr.id } }
         }
-        Spacer(Modifier.height(18.dp))
-        Label("Get a key at console.anthropic.com. It's stored encrypted on this device and only sent to api.anthropic.com.", color = P.sub, size = 12)
+        Spacer(Modifier.height(16.dp))
+        ProviderKeyForm(backdrop, p) { }
+        Spacer(Modifier.height(16.dp))
+        Label("For Google models use the Gemini provider with a free key from aistudio.google.com. Keys stay encrypted on this device and are only sent to the provider you choose.", color = P.sub, size = 12)
     }
 }
 
@@ -239,7 +236,7 @@ fun SchedulesScreen(backdrop: Backdrop, pad: PaddingValues, needPerms: () -> Uni
             }
             if (schedules.isEmpty()) item { Label("Claude can send a prompt for you at a set time and notify you with the reply.", color = P.sub) }
             items(schedules, key = { it.id }) { s ->
-                Column(Modifier.fillMaxWidth().background(P.card, RoundedCornerShape(20.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.fillMaxWidth().background(P.card, RoundedCornerShape(22.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Label(s.name, bold = true, size = 17)
@@ -270,7 +267,7 @@ private fun ScheduleEditor(backdrop: Backdrop, initial: Schedule, onClose: () ->
     var s by remember { mutableStateOf(initial) }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)).tap(onClick = onClose), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.padding(20.dp).fillMaxWidth().background(P.bg, RoundedCornerShape(20.dp)).tap { }
+            Modifier.padding(20.dp).fillMaxWidth().background(P.bg, RoundedCornerShape(28.dp)).tap { }
                 .verticalScroll(rememberScrollState()).padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -310,8 +307,4 @@ private fun Stepper(value: String, up: () -> Unit, down: () -> Unit) {
         Label("▼", color = P.accent, size = 20, modifier = Modifier.tap(onClick = down).padding(10.dp))
     }
 }
-
-
-
-
 

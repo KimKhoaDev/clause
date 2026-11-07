@@ -27,6 +27,7 @@ import com.example.claude.data.Repeat
 import com.example.claude.data.Repo
 import com.example.claude.data.Schedule
 import com.example.claude.data.Prompts
+import com.example.claude.net.AI
 import com.example.claude.net.ClaudeApi
 import java.util.Calendar
 import java.util.UUID
@@ -159,7 +160,7 @@ class PromptWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         val chatId = UUID.randomUUID().toString()
         val prompt = Msg("user", s.prompt)
         return try {
-            val (reply, sources) = ClaudeApi.completeFull(key, Repo.model.value, Prompts.system(null), listOf(prompt), web = s.webSearch)
+            val (reply, sources) = AI.completeFull(key, Repo.model.value, Prompts.system(null), listOf(prompt), web = s.webSearch)
             Repo.upsertChat(Chat(chatId, "⏰ ${s.name}", listOf(prompt, Msg("assistant", reply, sources = sources)), fromSchedule = true))
             Scheduler.notify(applicationContext, s.name, reply, chatId)
             Result.success()
@@ -191,7 +192,7 @@ class QueueWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx,
         val key = Repo.apiKey.value
         if (chat == null || key == null || chat.msgs.lastOrNull()?.role != "user") { Repo.deleteQueued(qid); return Result.success() }
         return try {
-            val (reply, sources) = ClaudeApi.completeFull(key, Repo.model.value, Prompts.system(chat.projectId), chat.msgs, 4096, q.web)
+            val (reply, sources) = AI.completeFull(key, Repo.model.value, Prompts.system(chat.projectId), chat.msgs, 4096, q.web)
             Repo.upsertChat(chat.copy(msgs = chat.msgs + Msg("assistant", reply, sources = sources), updated = System.currentTimeMillis()))
             Repo.deleteQueued(qid)
             Scheduler.notify(ctx, chat.title, reply, chat.id)

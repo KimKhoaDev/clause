@@ -1,5 +1,7 @@
 package com.example.claude.ui
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -9,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -50,7 +51,7 @@ fun ActivityScreen(backdrop: Backdrop, pad: PaddingValues) {
         }
         if (changes.isEmpty()) item { Label("Nothing yet.", color = P.sub) }
         items(changes.take(100), key = { it.id }) { c ->
-            Column(Modifier.fillMaxWidth().background(P.card, RoundedCornerShape(20.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.fillMaxWidth().background(P.card, RoundedCornerShape(18.dp)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Label(c.path, size = 13, font = FontFamily.Monospace)
                 Label("${c.tool} · ${c.note} · ${c.status} · ${fmt.format(Date(c.time))}", color = P.sub, size = 12)
                 if (c.status == "pending") Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
@@ -70,14 +71,10 @@ fun ActivityScreen(backdrop: Backdrop, pad: PaddingValues) {
         if (log.isEmpty()) item { Label("No device actions yet.", color = P.sub) }
         items(log.take(150)) { l ->
             val icon = when (l.decision) { "blocked" -> "⛔"; "denied" -> "🚫"; else -> if (l.ok) "✓" else "✗" }
-            Column(Modifier.fillMaxWidth().background(P.card, RoundedCornerShape(20.dp)).padding(12.dp)) {
+            Column(Modifier.fillMaxWidth().background(P.card, RoundedCornerShape(14.dp)).padding(12.dp)) {
                 Label("$icon  ${l.summary}", size = 13, font = FontFamily.Monospace)
                 Label("${l.risk.lowercase()} · ${l.decision} · ${fmt.format(Date(l.time))}", color = P.sub, size = 11)
             }
         }
     }
 }
-
-
-
-

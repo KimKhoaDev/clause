@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.draw.clip
@@ -28,6 +29,7 @@ import com.example.claude.data.UiPrefs
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.shapes.Capsule
+import com.example.claude.ui.glass.LiquidSlider
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,7 +46,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -76,7 +77,7 @@ import java.util.UUID
 fun Sheet(onClose: () -> Unit, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)).tap(onClick = onClose), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.padding(20.dp).fillMaxWidth().imePadding().background(P.bg, RoundedCornerShape(20.dp)).tap { }
+            Modifier.padding(20.dp).fillMaxWidth().imePadding().background(P.bg, RoundedCornerShape(28.dp)).tap { }
                 .verticalScroll(rememberScrollState()).padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) { content() }
@@ -85,7 +86,7 @@ fun Sheet(onClose: () -> Unit, content: @Composable () -> Unit) {
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(P.card, RoundedCornerShape(20.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().background(P.card, RoundedCornerShape(22.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Label(title, bold = true, size = 17)
         content()
     }
@@ -175,7 +176,7 @@ fun ProjectsScreen(ctl: ChatController, backdrop: Backdrop, pad: PaddingValues, 
             if (projects.isEmpty()) item { Label("Projects keep chats together and give Claude standing instructions, like a persona or the context of a task.", color = P.sub) }
             items(projects, key = { it.id }) { p ->
                 val mine = chats.filter { it.projectId == p.id }.sortedByDescending { it.updated }
-                Column(Modifier.fillMaxWidth().background(P.card, RoundedCornerShape(20.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.fillMaxWidth().background(P.card, RoundedCornerShape(22.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Label("📁 ${p.name}", bold = true, size = 17)
                     Label(p.instructions.take(140).ifBlank { "No instructions" }, color = P.sub, size = 13)
                     Label("${mine.size} chats", color = P.accent, size = 12, bold = true)
@@ -242,9 +243,11 @@ fun SettingsScreen(backdrop: Backdrop, pad: PaddingValues, needPerms: () -> Unit
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Section("Account") {
-            Label("API key  " + (key?.let { "••••" + it.takeLast(4) } ?: "—"), color = P.sub)
-            GlassButton(backdrop, { Repo.setApiKey(null); afterSignOut() }) { Label("Sign out", bold = true) }
+            Label(Repo.activeProvider().name + " key  " + (key?.let { "••••" + it.takeLast(4) } ?: "—"), color = P.sub)
+            GlassButton(backdrop, { Repo.setApiKey(null); afterSignOut() }) { Label("Sign out of this provider", bold = true) }
         }
+        Section("AI providers") { ProvidersSection(backdrop) }
+        Section("AI providers") { ProvidersSection(backdrop) }
         Section("Device control (Shizuku)") {
             val st = ShizukuState.status
             Label(st.label, color = if (st == ShizukuStatus.Ready) Color(0xFF3E9B63) else P.sub, bold = true, size = 14)
@@ -267,7 +270,7 @@ fun SettingsScreen(backdrop: Backdrop, pad: PaddingValues, needPerms: () -> Unit
             }
             Label("When Claude wants to act", bold = true, size = 15)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("Ask every time", "Auto-approve safe", "Full auto").forEachIndexed { i, l ->
+                listOf("Ask every time", "Auto-approve safe", "Auto (never ask)").forEachIndexed { i, l ->
                     Chip(backdrop, l, agentPrefs.mode == i) { Repo.setAgent(Repo.agent.value.copy(mode = i)) }
                 }
             }
@@ -335,12 +338,13 @@ fun SettingsScreen(backdrop: Backdrop, pad: PaddingValues, needPerms: () -> Unit
                 Switch(ui.vibrancy) { v -> upd { it.copy(vibrancy = v) } }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Chip(backdrop, "Reset glass", false) { upd { it.copy(blur = 6f, lensH = 14f, lensAmt = 28f, tint = 0.4f, vibrancy = true) } }
+                Chip(backdrop, "Reset glass", false) { upd { it.copy(blur = 8f, lensH = 24f, lensAmt = 24f, tint = 0.4f, vibrancy = true) } }
                 Chip(backdrop, "Reset all looks", false) { Repo.setUi(UiPrefs()) }
             }
         }
         Section("Model") {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Models.all.forEach { m -> Chip(backdrop, m.label, model == m.id) { Repo.setModel(m.id) } } }
+            Label("${Repo.activeProvider().name} · ${com.example.claude.data.shortModel(model)}", bold = true)
+            Label("Tap the model name at the top of a chat to switch provider or model.", color = P.sub, size = 13)
         }
         Section("Response style") {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Styles.all.keys.take(2).forEach { k -> Chip(backdrop, k, style == k) { Repo.setStyle(k) } } }
@@ -400,21 +404,11 @@ fun SettingsScreen(backdrop: Backdrop, pad: PaddingValues, needPerms: () -> Unit
 
 @Composable
 private fun GlassSlider(label: String, value: Float, min: Float, max: Float, fmt: (Float) -> String, onChange: (Float) -> Unit) {
-    val cb by rememberUpdatedState(onChange)
-    var w by remember { mutableStateOf(1f) }
-    val frac = ((value - min) / (max - min)).coerceIn(0f, 1f)
+    val bd = LocalBackdrop.current
     Column(Modifier.fillMaxWidth()) {
         Row { Label(label, Modifier.weight(1f), size = 14); Label(fmt(value), color = P.sub, size = 13) }
-        Box(
-            Modifier.fillMaxWidth().height(34.dp).onSizeChanged { w = it.width.toFloat().coerceAtLeast(1f) }
-                .pointerInput(min, max) { detectTapGestures { o -> cb(min + (o.x / w).coerceIn(0f, 1f) * (max - min)) } }
-                .pointerInput(min, max) { detectHorizontalDragGestures { ch, _ -> cb(min + (ch.position.x / w).coerceIn(0f, 1f) * (max - min)) } },
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            Box(Modifier.fillMaxWidth().height(6.dp).background(P.sub.copy(alpha = 0.3f), Capsule()))
-            Box(Modifier.fillMaxWidth(frac.coerceAtLeast(0.001f)).height(6.dp).background(P.accent, Capsule()))
-            Box(Modifier.padding(start = ((w * frac) / androidx.compose.ui.platform.LocalDensity.current.density - 11f).coerceAtLeast(0f).dp).size(22.dp).background(Color.White, Capsule()).border(2.dp, P.accent, Capsule()))
-        }
+        if (bd != null) LiquidSlider(value = { value }, onValueChange = onChange, valueRange = min..max,
+            visibilityThreshold = (max - min) / 500f, backdrop = bd, modifier = Modifier.padding(vertical = 8.dp))
     }
 }
 
@@ -450,7 +444,3 @@ fun ApprovalSheet(req: ApprovalRequest, backdrop: Backdrop, onDecide: (Decision)
         if (req.canSession) Chip(backdrop, "Allow “${req.tool}” for this chat", false) { onDecide(Decision.SESSION) }
     }
 }
-
-
-
-

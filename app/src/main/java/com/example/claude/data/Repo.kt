@@ -27,6 +27,8 @@ object Repo {
     private val _style = MutableStateFlow("Normal")
     private val _webDefault = MutableStateFlow(false)
     private val _queue = MutableStateFlow<List<QueuedSend>>(emptyList())
+    private val _provider = MutableStateFlow("anthropic")
+    private val _customs = MutableStateFlow<List<Provider>>(emptyList())
     private val _ui = MutableStateFlow(UiPrefs())
     private val _agent = MutableStateFlow(AgentPrefs())
     private val _syncUri = MutableStateFlow<String?>(null)
@@ -43,6 +45,8 @@ object Repo {
     val style: StateFlow<String> = _style
     val webDefault: StateFlow<Boolean> = _webDefault
     val queue: StateFlow<List<QueuedSend>> = _queue
+    val provider: StateFlow<String> = _provider
+    val customs: StateFlow<List<Provider>> = _customs
     val ui: StateFlow<UiPrefs> = _ui
     val agent: StateFlow<AgentPrefs> = _agent
     val syncUri: StateFlow<String?> = _syncUri
@@ -60,8 +64,13 @@ object Repo {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
         plain = app.getSharedPreferences("prefs", Context.MODE_PRIVATE)
-        _apiKey.value = secure.getString("api_key", null)
-        _model.value = plain.getString("model", _model.value)!!
+        _customs.value = runCatching {
+            val a = JSONArray(plain.getString("customs", "[]"))
+            (0 until a.length()).map { i -> a.getJSONObject(i).let { Provider(it.getString("id"), it.getString("name"), ApiKind.OPENAI, it.getString("base"), it.getString("model"), "API key", it.optBoolean("vision", true), false, true, "Custom OpenAI-compatible endpoint") } }
+        }.getOrDefault(emptyList())
+        _provider.value = plain.getString("provider", "anthropic")!!
+        _apiKey.value = keyOf(_provider.value)
+        _model.value = modelOf(_provider.value)
         _style.value = plain.getString("style", "Normal")!!
         _instructions.value = plain.getString("instructions", "")!!
         _memoryOn.value = plain.getBoolean("memory_on", true)
@@ -83,11 +92,41 @@ object Repo {
 
     fun attDir(): File = File(dir, "att").also { it.mkdirs() }
 
-    fun setApiKey(k: String?) {
-        secure.edit().apply { if (k == null) remove("api_key") else putString("api_key", k) }.apply()
-        _apiKey.value = k
+    // ---- providers (Anthropic + OpenAI-compatible gateways)
+    fun allProviders(): List<Provider> = Providers.builtins + _customs.value
+    fun providerById(id: String): Provider = allProviders().firstOrNull { it.id == id } ?: Providers.builtins.first()
+    fun activeProvider(): Provider = providerById(_provider.value)
+    fun keyOf(id: String): String? = secure.getString("key_$id", null) ?: if (id == "anthropic") secure.getString("api_key", null) else null
+    fun configured(): List<Provider> = allProviders().filter { keyOf(it.id) != null }
+    fun baseUrlOf(p: Provider): String = plain.getString("base_${p.id}", null)?.takeIf { it.isNotBlank() } ?: p.baseUrl
+    fun setBaseUrl(id: String, u: String) { plain.edit().putString("base_$id", u.trim().trimEnd('/')).apply() }
+    fun modelOf(id: String): String = plain.getString("model_$id", null)
+        ?: (if (id == "anthropic") plain.getString("model", null) else null) ?: providerById(id).defaultModel
+
+    fun setKey(id: String, k: String?) {
+        secure.edit().apply { if (k == null) { remove("key_$id"); if (id == "anthropic") remove("api_key") } else putString("key_$id", k) }.apply()
+        if (id == _provider.value) {
+            _apiKey.value = k
+            if (k == null) configured().firstOrNull()?.let { setActiveProvider(it.id) }
+        }
     }
-    fun setModel(m: String) { plain.edit().putString("model", m).apply(); _model.value = m }
+    /** Sets/clears the key of the active provider (null signs out of it). */
+    fun setApiKey(k: String?) = setKey(_provider.value, k)
+    fun setActiveProvider(id: String) {
+        plain.edit().putString("provider", id).apply()
+        _provider.value = id; _apiKey.value = keyOf(id); _model.value = modelOf(id)
+    }
+    fun setModel(m: String) { plain.edit().putString("model_${_provider.value}", m).apply(); _model.value = m }
+    fun addCustom(p: Provider) { saveCustoms(_customs.value + p) }
+    fun removeCustom(id: String) {
+        setKey(id, null); saveCustoms(_customs.value.filter { it.id != id })
+        if (_provider.value == id) setActiveProvider(configured().firstOrNull()?.id ?: "anthropic")
+    }
+    private fun saveCustoms(l: List<Provider>) {
+        _customs.value = l
+        val a = JSONArray(); l.forEach { a.put(JSONObject().put("id", it.id).put("name", it.name).put("base", it.baseUrl).put("model", it.defaultModel).put("vision", it.vision)) }
+        plain.edit().putString("customs", a.toString()).apply()
+    }
     fun setStyle(s: String) { plain.edit().putString("style", s).apply(); _style.value = s }
     fun setInstructions(s: String) { plain.edit().putString("instructions", s).apply(); _instructions.value = s; Sync.markDirty() }
     fun setMemoryOn(b: Boolean) { plain.edit().putBoolean("memory_on", b).apply(); _memoryOn.value = b }

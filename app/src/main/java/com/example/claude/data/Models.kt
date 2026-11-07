@@ -96,9 +96,9 @@ data class UiPrefs(
     val replyFont: Int = 0,            // 0 serif, 1 sans, 2 mono
     val textScale: Float = 1f,
     val aura: Float = 1f,              // background glow strength
-    val blur: Float = 6f,              // dp
-    val lensH: Float = 14f,            // refraction edge height, dp
-    val lensAmt: Float = 28f,          // refraction strength, dp
+    val blur: Float = 8f,              // dp
+    val lensH: Float = 24f,            // refraction edge height, dp
+    val lensAmt: Float = 24f,          // refraction strength, dp
     val tint: Float = 0.4f,            // glass surface opacity
     val vibrancy: Boolean = true,
 ) {
@@ -130,3 +130,28 @@ data class AgentPrefs(
         }.getOrDefault(AgentPrefs())
     }
 }
+
+enum class ApiKind { ANTHROPIC, OPENAI }
+
+data class Provider(
+    val id: String, val name: String, val kind: ApiKind, val baseUrl: String, val defaultModel: String, val keyHint: String,
+    val vision: Boolean = true, val builtin: Boolean = true, val keyOptional: Boolean = false, val note: String = "",
+)
+
+object Providers {
+    val builtins = listOf(
+        Provider("anthropic", "Anthropic", ApiKind.ANTHROPIC, "https://api.anthropic.com", Models.all.first().id, "sk-ant-…", note = "Claude directly. Supports web search."),
+        Provider("openrouter", "OpenRouter", ApiKind.OPENAI, "https://openrouter.ai/api/v1", "openrouter/auto", "sk-or-…", note = "One key, hundreds of models."),
+        Provider("kilo", "Kilo Gateway", ApiKind.OPENAI, "https://api.kilo.ai/api/gateway", "anthropic/claude-sonnet-4.5", "Kilo API key", note = "Kilo Code's model gateway."),
+        Provider("gemini", "Google Gemini", ApiKind.OPENAI, "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-flash", "AIza…", note = "Free key from Google AI Studio."),
+        Provider("openai", "OpenAI", ApiKind.OPENAI, "https://api.openai.com/v1", "gpt-4o-mini", "sk-…"),
+        Provider("groq", "Groq", ApiKind.OPENAI, "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", "gsk_…", vision = false),
+        Provider("deepseek", "DeepSeek", ApiKind.OPENAI, "https://api.deepseek.com/v1", "deepseek-chat", "sk-…", vision = false),
+        Provider("mistral", "Mistral", ApiKind.OPENAI, "https://api.mistral.ai/v1", "mistral-large-latest", "API key"),
+        Provider("xai", "xAI", ApiKind.OPENAI, "https://api.x.ai/v1", "grok-3", "xai-…"),
+        Provider("ollama", "Ollama (local)", ApiKind.OPENAI, "http://localhost:11434/v1", "llama3.2", "no key needed", keyOptional = true,
+            note = "Use your computer's address, e.g. http://192.168.1.20:11434/v1"),
+    )
+}
+
+fun shortModel(id: String): String = Models.all.firstOrNull { it.id == id }?.label ?: id.substringAfterLast('/').take(22)

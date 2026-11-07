@@ -27,11 +27,11 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +53,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.claude.agent.Shell
+import com.example.claude.data.ApiKind
+import com.example.claude.data.shortModel
 import com.example.claude.data.Attachment
 import com.example.claude.data.ToolStep
 import androidx.compose.ui.text.font.FontFamily
@@ -60,6 +62,8 @@ import com.example.claude.data.Models
 import com.example.claude.data.Repo
 import com.example.claude.data.Source
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.shapes.Capsule
 import com.example.claude.data.QueuedSend
 import java.text.SimpleDateFormat
@@ -77,16 +81,23 @@ fun ChatScreen(ctl: ChatController, backdrop: Backdrop, onMenu: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val model by Repo.model.collectAsState()
+    val prov by Repo.provider.collectAsState()
+    val prov by Repo.provider.collectAsState()
+    var picker by remember { mutableStateOf(false) }
+    var askAuto by remember { mutableStateOf(false) }
     val projects by Repo.projects.collectAsState()
     val project = ctl.projectId?.let { id -> projects.firstOrNull { it.id == id } }
     var input by remember { mutableStateOf("") }
     var inputBase by remember { mutableStateOf("") }
     var listening by remember { mutableStateOf(false) }
     var talk by remember { mutableStateOf(false) }
+    var picker by remember { mutableStateOf(false) }
+    var askAuto by remember { mutableStateOf(false) }
     var wantTalk by remember { mutableStateOf(false) }
     var artifact by remember { mutableStateOf<Pair<String, String>?>(null) }
     val list = rememberLazyListState()
     val last = ctl.msgs.lastOrNull()
+    val page = rememberLayerBackdrop()
     val queue by Repo.queue.collectAsState()
     val queuedHere = queue.filter { it.chatId == ctl.chatId }
     val allChats by Repo.chats.collectAsState()
@@ -113,6 +124,8 @@ fun ChatScreen(ctl: ChatController, backdrop: Backdrop, onMenu: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().layerBackdrop(page)) {
+        Aura()
         if (ctl.msgs.isEmpty()) {
             Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                 Label("✺", color = P.accent, size = 44, bold = true)
@@ -170,16 +183,15 @@ fun ChatScreen(ctl: ChatController, backdrop: Backdrop, onMenu: () -> Unit) {
             }
         }
 
+        }
+
         // header
         Row(Modifier.fillMaxWidth().padding(top = insetTop() + 10.dp, start = 14.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            GlassIcon(backdrop, "☰", onMenu)
+            GlassIcon(page, "☰", onMenu)
             Spacer(Modifier.weight(1f))
-            GlassButton(backdrop, {
-                val i = Models.all.indexOfFirst { it.id == model }
-                Repo.setModel(Models.all[(i + 1) % Models.all.size].id)
-            }) { Label("Clause · ${Models.label(model)} ⇅", bold = true, size = 15) }
+            GlassButton(page, { picker = true }) { Label("Clause · ${shortModel(model)} ⇅", bold = true, size = 15) }
             Spacer(Modifier.weight(1f))
-            GlassIcon(backdrop, "＋", { ctl.newChat(ctl.projectId) })
+            GlassIcon(page, "＋", { ctl.newChat(ctl.projectId) })
         }
 
         // composer
@@ -190,32 +202,42 @@ fun ChatScreen(ctl: ChatController, backdrop: Backdrop, onMenu: () -> Unit) {
         ) {
             if (ctl.pending.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ctl.pending.forEach { a ->
-                    Row(Modifier.glass(backdrop, Capsule()).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.glass(page, Capsule()).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Label((if (a.mime.startsWith("image/")) "🖼 " else "📄 ") + a.name.take(20), size = 13)
                         Label("  ✕", Modifier.tap { ctl.removeAttachment(a) }, P.sub, 13, true)
                     }
                 }
             }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Chip(backdrop, "🌐 Search", ctl.webSearch) { ctl.webSearch = !ctl.webSearch }
-                Chip(backdrop, "📎 Attach", false) { picker.launch("*/*") }
-                Chip(backdrop, "🎨 Imagine", ctl.imagine) { ctl.imagine = !ctl.imagine }
-                Chip(backdrop, "🛠 Device", ctl.agent) {
+                if (prov.isNotEmpty() && Repo.activeProvider().kind == ApiKind.ANTHROPIC) Chip(page, "🌐 Search", ctl.webSearch) { ctl.webSearch = !ctl.webSearch }
+                Chip(page, "📎 Attach", false) { picker.launch("*/*") }
+                Chip(page, "🎨 Imagine", ctl.imagine) { ctl.imagine = !ctl.imagine }
+                Chip(page, "🛠 Device", ctl.agent) {
                     if (!ctl.agent && !Shell.available()) Toast.makeText(ctx, "Set up Shizuku first: Settings → Device control", Toast.LENGTH_LONG).show()
-                    else ctl.agent = !ctl.agent
+                    else { ctl.agent = !ctl.agent; if (!ctl.agent) ctl.autoMode = false }
                 }
-                Chip(backdrop, "🎙 Talk", false) {
+                Chip(page, if (ctl.autoMode) "⚡ Auto ON" else "⚡ Auto", ctl.autoMode) {
+                    if (ctl.autoMode) ctl.autoMode = false
+                    else if (!Shell.available()) Toast.makeText(ctx, "Set up Shizuku first: Settings → Device control", Toast.LENGTH_LONG).show()
+                    else askAuto = true
+                }
+                Chip(page, if (ctl.autoMode) "⚡ Auto ON" else "⚡ Auto", ctl.autoMode) {
+                    if (ctl.autoMode) ctl.autoMode = false
+                    else if (!Shell.available()) Toast.makeText(ctx, "Set up Shizuku first: Settings → Device control", Toast.LENGTH_LONG).show()
+                    else askAuto = true
+                }
+                Chip(page, "🎙 Talk", false) {
                     if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) talk = true
                     else { wantTalk = true; micPerm.launch(Manifest.permission.RECORD_AUDIO) }
                 }
-                Chip(backdrop, if (listening) "⏹ Stop" else "🎤 Voice", listening) {
+                Chip(page, if (listening) "⏹ Stop" else "🎤 Voice", listening) {
                     if (listening) voice.stop()
                     else if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { inputBase = input; voice.start() }
                     else micPerm.launch(Manifest.permission.RECORD_AUDIO)
                 }
             }
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassField(backdrop, input, { input = it }, if (project != null) "Message in ${project.name}" else if (ctl.msgs.isEmpty()) "How can I help you today?" else "Reply to Claude…", Modifier.weight(1f))
+                GlassField(page, input, { input = it }, if (project != null) "Message in ${project.name}" else if (ctl.msgs.isEmpty()) "How can I help you today?" else "Reply to Claude…", Modifier.weight(1f))
                 GlassIcon(
                     backdrop, if (ctl.busy) "■" else "↑",
                     { if (ctl.busy) ctl.stop() else { if (listening) voice.stop(); ctl.send(input); input = "" } },
@@ -227,6 +249,24 @@ fun ChatScreen(ctl: ChatController, backdrop: Backdrop, onMenu: () -> Unit) {
         artifact?.let { a -> ArtifactViewer(a.first, a.second, backdrop) { artifact = null } }
         if (talk) VoiceModeOverlay(ctl, backdrop) { talk = false }
         ctl.approval?.let { ApprovalSheet(it, backdrop, ctl::resolveApproval) }
+        if (picker) ModelPickerSheet(backdrop) { picker = false }
+        if (askAuto) Sheet({ askAuto = false }) {
+            Label("Turn on Auto mode?", bold = true, size = 19, font = FontFamily.Serif)
+            Label("Clause will run device actions without asking, for this chat only. Catastrophic commands stay blocked and file changes can still be undone from Settings → Activity. Text from web pages, files or app screens can try to trick the AI, so only use Auto for tasks you trust.", color = P.sub, size = 14)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GlassButton(backdrop, { askAuto = false }, Modifier.weight(1f)) { Label("Cancel", bold = true) }
+                GlassButton(backdrop, { ctl.agent = true; ctl.autoMode = true; askAuto = false }, Modifier.weight(1f), tint = Color(0xFFD64545).copy(alpha = 0.88f)) { Label("Enable Auto", color = Color.White, bold = true) }
+            }
+        }
+        if (picker) ModelPickerSheet(backdrop) { picker = false }
+        if (askAuto) Sheet({ askAuto = false }) {
+            Label("Turn on Auto mode?", bold = true, size = 19, font = androidx.compose.ui.text.font.FontFamily.Serif)
+            Label("Claude will run device actions (files, apps, settings, taps, installs) without asking, until you turn it off or start a new chat. Catastrophic commands stay blocked and every action is logged with undo for file changes. Web pages or files could try to trick it, so use it for tasks you trust.", color = P.sub, size = 14)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GlassButton(backdrop, { askAuto = false }, Modifier.weight(1f)) { Label("Cancel", bold = true) }
+                GlassButton(backdrop, { ctl.autoMode = true; ctl.agent = true; askAuto = false }, Modifier.weight(1f), tint = P.accent.copy(alpha = 0.92f)) { Label("Enable Auto", color = Color.White, bold = true) }
+            }
+        }
     }
 }
 
@@ -319,7 +359,3 @@ private fun ToolSteps(steps: List<ToolStep>) {
         }
     }
 }
-
-
-
-
